@@ -1,219 +1,149 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en" data-color-mode="dark" data-dark-theme="dark">
-    <head>
-        <meta charset="UTF-8" >
-        <meta name="viewport" content="width=device-width, initial-scale=1" >
-        <meta name="google-site-verification" content="UoXRZQYOmfH9LrIXUykFFNflzssDYaNNAzNQlo8grKQ" >
-        <meta name="msvalidate.01" content="C348576BB92261CC55029F04F308DB94" >
-        <title>Newsy</title>
-        <link
-            rel="stylesheet"
-            href="https://cdnjs.cloudflare.com/ajax/libs/Primer/21.2.2/primer.css"
-        >
-        <style>
-            :root {
-                --purple-glow: linear-gradient(45deg, #8a2be2, #da70d6);
-                --primer-green: #2da44e;
-            }
 
-            body {
-                background-color: var(--color-canvas-default);
-                color: var(--color-fg-default);
-            }
+	<head>
+		<meta charset="UTF-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1">
+		<meta name="google-site-verification" content="UoXRZQYOmfH9LrIXUykFFNflzssDYaNNAzNQlo8grKQ">
+		<meta name="msvalidate.01" content="C348576BB92261CC55029F04F308DB94">
+		<title>Newsy</title>
+		<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/Primer/21.2.2/primer.css">
+		<style>
+			:root {
+				--purple-glow: linear-gradient(45deg, #8a2be2, #da70d6);
+				--primer-green: #2da44e;
+			}
+			
+			body {
+				background-color: var(--color-canvas-default);
+				color: var(--color-fg-default);
+			}
+			
+			.markdown-body {
+				max-width: 600px;
+				margin: 0 auto;
+				padding: 48px 24px;
+			}
+			
+			#button-code {
+				font-size: 13px;
+				resize: vertical;
+				background-color: var(--color-canvas-subtle);
+			}
+			
+			#subscribe-iframe {
+				border: 1px solid var(--borderColor-default);
+				border-radius: 6px;
+				width: 100%;
+				height: 160px;
+				display: block;
+				background: white;
+			}
+			
+			.form-group {
+				margin-bottom: 16px;
+			}
+			
+			.label-text {
+				font-weight: 600;
+				display: block;
+				margin-bottom: 4px;
+			}
+		</style>
+	</head>
 
-            .markdown-body {
-                max-width: 600px;
-                margin: 0 auto;
-                padding: 48px 24px;
-            }
+	<body>
+		<div class="markdown-body">
+			<nav class="d-flex flex-justify-between flex-items-center mb-3 pb-2" style="border-bottom: 1px solid var(--borderColor-default)">
+				<a href="/" class="Header-link f4 text-bold" style="text-decoration: none">📰 Newsy</a>
+				<span class="d-flex gap-2">
+					<a href="https://github.com/Pratyay360/newsy" class="btn btn-sm btn-primary">GitHub</a>
+				</span>
+			</nav>
+			<h1 class="h2 mb-2">Newsy</h1>
 
-            #button-code {
-                font-size: 13px;
-                resize: vertical;
-                background-color: var(--color-canvas-subtle);
-            }
+			<form id="repo-form">
+				<div class="form-group">
+					<label for="repository" class="label-text">GitHub Repository</label>
+					<input id="repository" name="repository" type="text" class="form-control" placeholder="owner/repository" autocomplete="off" required>
+				</div>
 
-            #subscribe-iframe {
-                border: 1px solid var(--borderColor-default);
-                border-radius: 6px;
-                width: 100%;
-                height: 160px;
-                display: block;
-                background: white;
-            }
+				<div class="form-group">
+					<label for="search-label" class="label-text">Issue Label to Search</label>
+					<input id="search-label" type="text" value="newsletter" class="form-control" placeholder="e.g. newsletter, updates">
+				</div>
 
-            .form-group {
-                margin-bottom: 16px;
-            }
+				<div class="Box mb-3">
+					<div class="Box-header">
+						<h2 class="Box-title f5 text-bold">
+							Button customizer
+						</h2>
+					</div>
+					<div class="Box-body">
+						<div class="form-group">
+							<label for="custom-btn-text" class="label-text f6">Button Label</label>
+							<input id="custom-btn-text" type="text" value="Subscribe on GitHub" class="form-control">
+						</div>
+						<div class="d-flex gap-3">
+							<div class="flex-1">
+								<label for="btn-style" class="label-text f6">Theme Variant</label>
+								<select id="btn-style" class="form-select">
+									<option value="primer-primary">
+										Primer Blue
+									</option>
+									<option value="primer-dark">
+										GitHub Dark
+									</option>
+									<option value="primer-green">
+										Primer Green
+									</option>
+									<option value="purple-glow">
+										Purple Neon
+									</option>
+									<option value="minimal">
+										Minimal Outline
+									</option>
+								</select>
+							</div>
+							<div class="flex-1">
+								<label for="btn-size" class="label-text f6">Button Size</label>
+								<select id="btn-size" class="form-select">
+									<option value="sm">Small</option>
+									<option value="md" selected>Medium</option>
+									<option value="lg">Large</option>
+								</select>
+							</div>
+						</div>
+					</div>
+				</div>
 
-            .label-text {
-                font-weight: 600;
-                display: block;
-                margin-bottom: 4px;
-            }
-        </style>
-    </head>
+				<button type="submit" class="btn btn-primary w-100" id="submit-button">
+					Generate iframe
+				</button>
+			</form>
 
-    <body>
-        <div class="markdown-body">
-            <nav
-                class="d-flex flex-justify-between flex-items-center mb-3 pb-2"
-                style="border-bottom: 1px solid var(--borderColor-default)"
-            >
-                <a
-                    href="/"
-                    class="Header-link f4 text-bold"
-                    style="text-decoration: none"
-                    >📰 Newsy</a
-                >
-                <span class="d-flex gap-2">
-                    <a href="docs.html" class="btn btn-sm">docs</a>
-                    <a
-                        href="https://github.com/Pratyay360/newsy"
-                        class="btn btn-sm btn-primary"
-                        >GitHub</a
-                    >
-                </span>
-            </nav>
-            <h1 class="h2 mb-2">Newsy</h1>
-            <p class="color-fg-muted mb-4">
-                Generate a professional GitHub subscription button and iframe
-                for your project's newsletter issue.
-            </p>
-            <p class="f6 color-fg-muted mb-3">
-                New here? Read the <a href="docs.html">documentation</a>
-            </p>
-            <form id="repo-form">
-                <div class="form-group">
-                    <label for="repository" class="label-text"
-                        >GitHub Repository</label
-                    >
-                    <input
-                        id="repository"
-                        name="repository"
-                        type="text"
-                        class="form-control"
-                        placeholder="owner/repository"
-                        autocomplete="off"
-                        required
-                    >
-                </div>
-
-                <div class="form-group">
-                    <label for="search-label" class="label-text"
-                        >Issue Label to Search</label
-                    >
-                    <input
-                        id="search-label"
-                        type="text"
-                        value="newsletter"
-                        class="form-control"
-                        placeholder="e.g. newsletter, updates"
-                    >
-                </div>
-
-                <div class="Box mb-3">
-                    <div class="Box-header">
-                        <h2 class="Box-title f5 text-bold">
-                            Button customizer
-                        </h2>
-                    </div>
-                    <div class="Box-body">
-                        <div class="form-group">
-                            <label for="custom-btn-text" class="label-text f6"
-                                >Button Label</label
-                            >
-                            <input
-                                id="custom-btn-text"
-                                type="text"
-                                value="Subscribe on GitHub"
-                                class="form-control"
-                            >
-                        </div>
-                        <div class="d-flex gap-3">
-                            <div class="flex-1">
-                                <label for="btn-style" class="label-text f6"
-                                    >Theme Variant</label
-                                >
-                                <select id="btn-style" class="form-select">
-                                    <option value="primer-primary">
-                                        Primer Blue
-                                    </option>
-                                    <option value="primer-dark">
-                                        GitHub Dark
-                                    </option>
-                                    <option value="primer-green">
-                                        Primer Green
-                                    </option>
-                                    <option value="purple-glow">
-                                        Purple Neon
-                                    </option>
-                                    <option value="minimal">
-                                        Minimal Outline
-                                    </option>
-                                </select>
-                            </div>
-                            <div class="flex-1">
-                                <label for="btn-size" class="label-text f6"
-                                    >Button Size</label
-                                >
-                                <select id="btn-size" class="form-select">
-                                    <option value="sm">Small</option>
-                                    <option value="md" selected>Medium</option>
-                                    <option value="lg">Large</option>
-                                </select>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <button
-                    type="submit"
-                    class="btn btn-primary w-100"
-                    id="submit-button"
-                >
-                    Generate iframe
-                </button>
-            </form>
-
-            <div id="status-flash" class="mt-3" hidden>
-                <div id="status" class="flash" aria-live="polite"></div>
-            </div>
-            <div id="result" class="Box mt-3" hidden aria-live="polite">
-                <div class="Box-header">
-                    <h2 class="Box-title f5 text-bold">Preview & Snippet</h2>
-                </div>
-                <div class="Box-body">
-                    <p id="issue-info" class="mb-2 f5 text-bold"></p>
-                    <iframe
-                        id="subscribe-iframe"
-                        title="Subscription preview"
-                    ></iframe>
-                </div>
-                <div class="Box-footer">
-                    <label for="button-code" class="d-block mb-1 text-bold f6"
-                        >Embed code</label
-                    >
-                    <textarea
-                        id="button-code"
-                        class="form-control input-monospace"
-                        readonly
-                        rows="3"
-                    ></textarea>
-                    <div class="mt-2">
-                        <button
-                            id="copy-button"
-                            type="button"
-                            class="btn btn-sm btn-secondary"
-                        >
-                            Copy to clipboard
-                        </button>
-                    </div>
-                </div>
-
-            </div>
-
-        </div>
-        <script src="script.js"></script>
-    </body>
+			<div id="status-flash" class="mt-3" hidden>
+				<div id="status" class="flash" aria-live="polite"></div>
+			</div>
+			<div id="result" class="Box mt-3" hidden aria-live="polite">
+				<div class="Box-header">
+					<h2 class="Box-title f5 text-bold">Preview & Snippet</h2>
+				</div>
+				<div class="Box-body">
+					<p id="issue-info" class="mb-2 f5 text-bold"></p>
+					<iframe id="subscribe-iframe" title="Subscription preview"></iframe>
+				</div>
+				<div class="Box-footer">
+					<label for="button-code" class="d-block mb-1 text-bold f6">Embed code</label>
+					<textarea id="button-code" class="form-control input-monospace" readonly rows="3"></textarea>
+					<div class="mt-2">
+						<button id="copy-button" type="button" class="btn btn-sm btn-secondary">
+							Copy to clipboard
+						</button>
+					</div>
+				</div>
+			</div>
+		</div>
+		<script src="script.js"></script>
+	</body>
 </html>

@@ -1,6 +1,5 @@
 [tools]
 sops = "latest"
-"go:github.com/yieldray/surgecli" = "latest"
 go = "latest"
 
 
@@ -11,9 +10,6 @@ SOPS_AGE_RECIPIENTS = "age1a9p2k3u40mvdntpad4ga7akvnnqqwm6eskfr2yxkgq3u9lp7jfns2
 [tasks]
 encrypt = "sops -e -i .env && mv .env .env.example"
 decrypt = "mv .env.example .env && sops -d -i .env"
-docs = "mise run makko && ./makko* docs && cp docs/index.html docs/web/index.html && cp docs/script.js docs/web/script.js && cp docs/robots.txt docs/web/robots.txt"
-makko = "go run ./bin/makko.go"
-deploy = "mise run docs && surgecli deploy ./docs/web newsy.surge.sh"
 wasm = "GOOS=js GOARCH=wasm go build -o newsy.wasm"
 
 [deps]

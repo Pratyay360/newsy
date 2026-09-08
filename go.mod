@@ -5,6 +5,7 @@ go 1.26.5
 require (
 	github.com/Pratyay360/probot-go v0.0.0-20260803191145-18b9a068a77b
 	github.com/google/go-github/v88 v88.0.0
+	github.com/lib/pq v1.12.3
 	github.com/rs/zerolog v1.35.1
 )
 

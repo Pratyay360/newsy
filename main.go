@@ -3,8 +3,10 @@ package main
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/Pratyay360/probot-go"
 	"github.com/google/go-github/v88/github"
@@ -18,13 +20,6 @@ const (
 	maxFileChars      = 20000
 )
 
-type pushConfig struct {
-	track      string
-	dest       string
-	issueTitle string
-	issueLabel string
-}
-
 func main() {
 	loadDotEnv()
 
@@ -33,21 +28,81 @@ func main() {
 		log.Fatal().Err(err).Msg("invalid options from environment")
 	}
 
-	cfg := loadPushConfig()
+	store, err := openStoreFromEnv()
+	if err != nil {
+		log.Fatal().Err(err).Msg("failed to connect to postgres")
+	}
+	if closer, ok := store.(interface{ Close() error }); ok {
+		defer func() { _ = closer.Close() }()
+	}
+
 	app, err := probot.New(opts)
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to create app")
 	}
+	eff := app.Options()
 
-	registerHandlers(app, cfg)
+	registerHandlers(app, store)
 
 	fmt.Printf("probot %s listening on http://%s:%d%s\n",
-		app.Version(), opts.Host, opts.Port, app.WebhookPath())
+		app.Version(), eff.Host, eff.Port, app.WebhookPath())
 
-	server := probot.NewServer(probot.ServerOptions{Probot: app})
-	if err := server.Start(); err != nil {
-		log.Fatal().Err(err).Msg("server ")
+	if err := startCombinedServer(app, store, eff.Host, eff.Port); err != nil {
+		log.Fatal().Err(err).Msg("server error")
 	}
+}
+
+func openStoreFromEnv() (Store, error) {
+	dsn := os.Getenv("DATABASE_URL")
+	if dsn == "" {
+		log.Info().Msg("no DATABASE_URL set; using in-memory store (single-tenant mode)")
+		return NewMemoryStore(), nil
+	}
+	store, err := OpenPostgresStore(dsn)
+	if err != nil {
+		return nil, err
+	}
+	log.Info().Msg("connected to postgres; subscription-based routing active")
+	return store, nil
+}
+
+// startCombinedServer serves the probot webhook handler, the subscription
+// API, and the public install-check endpoint on the same host and port.
+// There is no admin UI: installs are recorded purely from webhooks.
+func startCombinedServer(app *probot.Probot, store Store, host string, port int) error {
+	mux := http.NewServeMux()
+	mux.Handle("/api/check", checkHandler(store))
+	mux.Handle("/api/check/", checkHandler(store))
+	webhook := app.WebhookHandler()
+	webhookPath := app.WebhookPath()
+	if webhookPath == "" {
+		webhookPath = "/api/github/webhooks"
+	}
+	mux.Handle(webhookPath, webhook)
+	if webhookPath != "/webhook" {
+		mux.Handle("/webhook", webhook)
+		mux.Handle("/webhook/", webhook)
+	}
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		_, _ = w.Write([]byte("newsy bot is running\n"))
+	})
+
+	srv := &http.Server{
+		Addr:              fmt.Sprintf("%s:%d", host, port),
+		Handler:           mux,
+		ReadHeaderTimeout: 5 * time.Second,
+	}
+	log.Info().Str("addr", srv.Addr).Msg("starting server (webhook + API + frontend UI)")
+	err := srv.ListenAndServe()
+	if err == http.ErrServerClosed {
+		return nil
+	}
+	return err
 }
 
 func loadDotEnv() {
@@ -59,24 +114,10 @@ func loadDotEnv() {
 	}
 }
 
-func loadPushConfig() pushConfig {
-	return pushConfig{
-		track:      os.Getenv("TRACK_REPO"),
-		dest:       os.Getenv("DEST_REPO"),
-		issueTitle: envOrDefault("ISSUE_TITLE", defaultIssueTitle),
-		issueLabel: envOrDefault("ISSUE_LABEL", defaultIssueLabel),
-	}
-}
-
-func envOrDefault(key, fallback string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
-	}
-	return fallback
-}
-
-func registerHandlers(app *probot.Probot, cfg pushConfig) {
-	app.On("push", makePushHandler(cfg))
+func registerHandlers(app *probot.Probot, store Store) {
+	app.On("push", makePushHandler(store))
+	app.On("installation", makeInstallationHandler(store))
+	app.On("installation_repositories", makeInstallationReposHandler(store))
 
 	app.OnAny(func(ctx *probot.Context) error {
 		l := ctx.Log()
@@ -92,7 +133,7 @@ func registerHandlers(app *probot.Probot, cfg pushConfig) {
 	})
 }
 
-func makePushHandler(cfg pushConfig) func(ctx *probot.Context) error {
+func makePushHandler(store Store) func(ctx *probot.Context) error {
 	return func(ctx *probot.Context) error {
 		l := ctx.Log()
 
@@ -101,47 +142,166 @@ func makePushHandler(cfg pushConfig) func(ctx *probot.Context) error {
 			l.Error().Err(err).Msg("failed to get repository from context")
 			return nil
 		}
-		if !shouldHandlePush(pushRepo, cfg.track, l) {
+
+		tenant, ok := resolveTenantConfig(pushRepo, store, l)
+		if !ok {
 			return nil
 		}
 
-		commitSummary, changedFiles, err := pushSummary(ctx.Payload())
+		commitSummary, _, addedFiles, err := pushSummary(ctx.Payload())
 		if err != nil {
 			l.Error().Err(err).Msg("failed to extract info from payload")
 			return err
 		}
-		if commitSummary == "" && len(changedFiles) == 0 {
+
+		// Only a newly added file is a new post. Pushes that merely
+		// modify or delete existing files produce no announcement.
+		newPosts := filterPostFiles(addedFiles, tenant.postPattern)
+		if len(newPosts) == 0 {
+			l.Debug().Msg("push adds no new posts; skipping announcement")
 			return nil
 		}
 
-		destOwner, destRepo := resolveDestRepo(pushRepo, cfg.dest, l)
-		body := buildAnnouncementBody(ctx, pushRepo, commitSummary, changedFiles, l)
+		body := buildAnnouncementBody(ctx, pushRepo, commitSummary, newPosts, l)
 
-		return upsertAnnouncementIssue(ctx, destOwner, destRepo, cfg.issueTitle, cfg.issueLabel, body, l)
+		return upsertAnnouncementIssue(ctx, tenant.destOwner, tenant.destRepo, tenant.issueTitle, tenant.issueLabel, body, l)
 	}
 }
 
-func shouldHandlePush(repo probot.Repo, track string, l zerolog.Logger) bool {
-	if track == "" {
-		return true
+// makeInstallationHandler records app installs in the DB: on install it
+// stores one row per accessible repo, on uninstall/suspend it drops them.
+func makeInstallationHandler(store Store) func(ctx *probot.Context) error {
+	return func(ctx *probot.Context) error {
+		payload := ctx.Payload()
+		action, _ := payload["action"].(string)
+		installationID := payloadInstallationID(payload)
+		if installationID == 0 || store == nil {
+			return nil
+		}
+		switch action {
+		case "created", "unsuspend", "new_permissions_accepted":
+			for _, r := range payloadRepoFullNames(payload, "repositories") {
+				owner, repo, ok := splitRepo(r)
+				if !ok {
+					continue
+				}
+				_, _ = store.Upsert(context.Background(), Subscription{
+					SourceOwner: owner, SourceRepo: repo,
+					InstallationID: installationID,
+				})
+			}
+		case "deleted", "suspend":
+			_ = store.ClearInstallation(context.Background(), installationID)
+		}
+		return nil
 	}
-	got := repo.Owner + "/" + repo.Repo
-	if track != got {
-		l.Debug().Str("track", track).Str("got", got).Msg("push is not tracked")
-		return false
-	}
-	return true
 }
 
-func resolveDestRepo(pushRepo probot.Repo, dest string, l zerolog.Logger) (owner, repo string) {
-	if dest == "" {
-		return pushRepo.Owner, pushRepo.Repo
+// makeInstallationReposHandler tracks repos added/removed on an install.
+func makeInstallationReposHandler(store Store) func(ctx *probot.Context) error {
+	return func(ctx *probot.Context) error {
+		payload := ctx.Payload()
+		action, _ := payload["action"].(string)
+		installationID := payloadInstallationID(payload)
+		if installationID == 0 || store == nil {
+			return nil
+		}
+		switch action {
+		case "added":
+			for _, r := range payloadRepoFullNames(payload, "repositories_added") {
+				owner, repo, ok := splitRepo(r)
+				if !ok {
+					continue
+				}
+				_, _ = store.Upsert(context.Background(), Subscription{
+					SourceOwner: owner, SourceRepo: repo,
+					InstallationID: installationID,
+				})
+			}
+		case "removed":
+			for _, r := range payloadRepoFullNames(payload, "repositories_removed") {
+				owner, repo, ok := splitRepo(r)
+				if !ok {
+					continue
+				}
+				_, _ = store.Upsert(context.Background(), Subscription{
+					SourceOwner: owner, SourceRepo: repo,
+					InstallationID: 0,
+				})
+			}
+		}
+		return nil
 	}
-	if o, r, ok := splitRepo(dest); ok {
-		return o, r
+}
+
+func payloadInstallationID(payload map[string]any) int64 {
+	inst, _ := payload["installation"].(map[string]any)
+	if inst == nil {
+		return 0
 	}
-	l.Warn().Str("dest_repo", dest).Msg("DEST_REPO")
-	return pushRepo.Owner, pushRepo.Repo
+	switch id := inst["id"].(type) {
+	case float64:
+		return int64(id)
+	case int64:
+		return id
+	case int:
+		return int64(id)
+	}
+	return 0
+}
+
+func payloadRepoFullNames(payload map[string]any, key string) []string {
+	items, _ := payload[key].([]any)
+	var out []string
+	for _, item := range items {
+		m, _ := item.(map[string]any)
+		if m == nil {
+			continue
+		}
+		if full, _ := m["full_name"].(string); full != "" {
+			out = append(out, full)
+		}
+	}
+	return out
+}
+
+// tenantConfig is the effective per-push routing: which destination repo and
+// issue receive the announcement.
+type tenantConfig struct {
+	destOwner   string
+	destRepo    string
+	issueTitle  string
+	issueLabel  string
+	postPattern string
+}
+
+func resolveTenantConfig(pushRepo probot.Repo, store Store, l zerolog.Logger) (tenantConfig, bool) {
+	if store != nil {
+		sub, err := store.Get(context.Background(), pushRepo.Owner, pushRepo.Repo)
+		if err == nil && sub.InstallationID != 0 {
+			pattern := strings.TrimSpace(sub.PostPattern)
+			if pattern == "" {
+				pattern = strings.TrimSpace(os.Getenv("POST_PATTERN"))
+			}
+			l.Info().
+				Str("source", pushRepo.Owner+"/"+pushRepo.Repo).
+				Str("dest", sub.DestOwner+"/"+sub.DestRepo).
+				Msg("routing push via subscription")
+			return tenantConfig{
+				destOwner:   sub.DestOwner,
+				destRepo:    sub.DestRepo,
+				issueTitle:  sub.IssueTitle,
+				issueLabel:  sub.IssueLabel,
+				postPattern: pattern,
+			}, true
+		}
+		if err != nil && err != ErrSubscriptionNotFound {
+			l.Error().Err(err).Msg("failed to load subscription; skipping push")
+			return tenantConfig{}, false
+		}
+	}
+	l.Debug().Str("repo", pushRepo.Owner+"/"+pushRepo.Repo).Msg("push is not installed; skipping")
+	return tenantConfig{}, false
 }
 
 func buildAnnouncementBody(ctx *probot.Context, pushRepo probot.Repo, commitSummary string, changedFiles []string, l zerolog.Logger) string {
@@ -268,8 +428,8 @@ func createCommentWithLockHandling(ctx *probot.Context, owner, repo string, issu
 	if err != nil {
 		if wasLocked {
 			if lockErr := lockIssue(ctx, owner, repo, issue); lockErr != nil {
-				l := ctx.Log()
-				l.Warn().Err(lockErr).Int("issue", issue.GetNumber()).Msg("failed to re-lock issue after comment error")
+				ll := ctx.Log()
+				ll.Warn().Err(lockErr).Int("issue", issue.GetNumber()).Msg("failed to re-lock issue after comment error")
 			}
 		}
 		return nil, err
@@ -277,8 +437,8 @@ func createCommentWithLockHandling(ctx *probot.Context, owner, repo string, issu
 
 	if wasLocked {
 		if err := lockIssue(ctx, owner, repo, issue); err != nil {
-			l := ctx.Log()
-			l.Warn().Err(err).Int("issue", issue.GetNumber()).Msg("comment added but failed to re-lock issue")
+			ll := ctx.Log()
+			ll.Warn().Err(err).Int("issue", issue.GetNumber()).Msg("comment added but failed to re-lock issue")
 			return comment, err
 		}
 	}
@@ -361,14 +521,15 @@ func getHeadSHA(payload map[string]any) string {
 	return ""
 }
 
-func pushSummary(payload map[string]any) (summary string, changedFiles []string, err error) {
+func pushSummary(payload map[string]any) (summary string, changedFiles, addedFiles []string, err error) {
 	commits, ok := payload["commits"].([]any)
 	if !ok || len(commits) == 0 {
-		return "", nil, nil
+		return "", nil, nil, nil
 	}
 
 	var sb strings.Builder
 	seen := make(map[string]bool)
+	addedSeen := make(map[string]bool)
 
 	for _, c := range commits {
 		commit, ok := c.(map[string]any)
@@ -396,9 +557,15 @@ func pushSummary(payload map[string]any) (summary string, changedFiles []string,
 						seen[name] = true
 						changedFiles = append(changedFiles, name)
 					}
+					if field == "added" {
+						if ok && !addedSeen[name] {
+							addedSeen[name] = true
+							addedFiles = append(addedFiles, name)
+						}
+					}
 				}
 			}
 		}
 	}
-	return sb.String(), changedFiles, nil
+	return sb.String(), changedFiles, addedFiles, nil
 }
