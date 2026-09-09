@@ -5,8 +5,6 @@ import (
 	"net/http"
 )
 
-// checkHandler is public (no token): the static site calls it to verify
-// the bot can access a repo before generating a snippet.
 func checkHandler(store Store) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
