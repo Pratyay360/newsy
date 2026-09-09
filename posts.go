@@ -9,7 +9,7 @@ import (
 func matchPostPattern(file, pattern string) bool {
 	pattern = strings.TrimSpace(pattern)
 	if pattern == "" {
-		return true
+		return isPostFile(file)
 	}
 	for _, p := range strings.Split(pattern, ",") {
 		p = strings.TrimSpace(p)
@@ -24,16 +24,28 @@ func matchPostPattern(file, pattern string) bool {
 }
 
 func filterPostFiles(files []string, pattern string) []string {	
-	if strings.TrimSpace(pattern) == "" {
-		return files
-	}
 	out := make([]string, 0, len(files))
 	for _, f := range files {
+		if !isPostFile(f) {
+			continue
+		}
 		if matchPostPattern(f, pattern) {
 			out = append(out, f)
 		}
 	}
 	return out
+}
+
+// isPostFile reports whether file has a watched post extension.
+// Only .md, .markdown, .mdx and .html are watched.
+func isPostFile(file string) bool {
+	ext := strings.ToLower(path.Ext(strings.TrimSpace(file)))
+	switch ext {
+	case ".md", ".markdown", ".mdx", ".html":
+		return true
+	default:
+		return false
+	}
 }
 
 func globMatch(pattern, name string) bool {

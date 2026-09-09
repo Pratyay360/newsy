@@ -1,8 +1,4 @@
 (() => {
-
-    const NEWSY_API_BASE = "https://newsy-ruby.vercel.app";
-    const NEWSY_INSTALL_URL = "https://github.com/apps/newsletter-newsy/installations/new";
-
     const form = document.getElementById("repo-form");
     const repositoryInput = document.getElementById("repository");
     const submitButton = document.getElementById("submit-button");
@@ -110,29 +106,6 @@
         resultContainer.hidden = true;
 
         setLoading(true);
-        showStatus(
-            `Checking whether the Newsy app can access ${owner}/${repo}…`,
-            "warn",
-        );
-
-        const access = await checkBotAccess(owner, repo);
-        if (!access) {
-            showStatus(
-                "Could not reach the Newsy server. Set it with ?api=https://your-server and try again.",
-                "error",
-            );
-            setLoading(false);
-            return;
-        }
-        if (!access.installed) {
-            showStatus(
-                `The Newsy app is not installed on ${owner}/${repo}. Install it first: ${NEWSY_INSTALL_URL}`,
-                "error",
-            );
-            setLoading(false);
-            return;
-        }
-
         showStatus(
             "Searching GitHub for an open issue labeled “newsletter”…",
             "warn",
@@ -487,3 +460,4 @@
         });
     }
 })();
+  

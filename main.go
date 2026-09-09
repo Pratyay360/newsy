@@ -164,7 +164,8 @@ func makePushHandler(store Store) func(ctx *probot.Context) error {
 
 		body := buildAnnouncementBody(ctx, pushRepo, commitSummary, newPosts, l)
 
-		return upsertAnnouncementIssue(ctx, tenant.destOwner, tenant.destRepo, tenant.issueTitle, tenant.issueLabel, body, l)
+		// Create issue in the source repo (where content is changed)
+		return upsertAnnouncementIssue(ctx, pushRepo.Owner, pushRepo.Repo, tenant.issueTitle, tenant.issueLabel, body, l)
 	}
 }
 
@@ -280,9 +281,6 @@ func resolveTenantConfig(pushRepo probot.Repo, store Store, l zerolog.Logger) (t
 		sub, err := store.Get(context.Background(), pushRepo.Owner, pushRepo.Repo)
 		if err == nil && sub.InstallationID != 0 {
 			pattern := strings.TrimSpace(sub.PostPattern)
-			if pattern == "" {
-				pattern = strings.TrimSpace(os.Getenv("POST_PATTERN"))
-			}
 			l.Info().
 				Str("source", pushRepo.Owner+"/"+pushRepo.Repo).
 				Str("dest", sub.DestOwner+"/"+sub.DestRepo).
@@ -446,6 +444,9 @@ func createCommentWithLockHandling(ctx *probot.Context, owner, repo string, issu
 }
 
 func findOpenIssueByLabel(ctx *probot.Context, owner, repo, label string) (*github.Issue, error) {
+	l := ctx.Log()
+
+	// First, search by label
 	opts := &github.IssueListByRepoOptions{
 		State:       "open",
 		Labels:      []string{label},
@@ -455,10 +456,29 @@ func findOpenIssueByLabel(ctx *probot.Context, owner, repo, label string) (*gith
 	if err != nil {
 		return nil, err
 	}
-	if len(issues) == 0 {
-		return nil, nil
+	if len(issues) > 0 {
+		l.Info().Int("issue", issues[0].GetNumber()).Str("label", label).Msg("found existing issue by label")
+		return issues[0], nil
 	}
-	return issues[0], nil
+
+	// Fallback: search by title if no issue found by label
+	titleOpts := &github.IssueListByRepoOptions{
+		State:       "open",
+		ListOptions: github.ListOptions{PerPage: 100},
+	}
+	allIssues, _, err := ctx.GitHub().Issues.ListByRepo(context.Background(), owner, repo, titleOpts)
+	if err != nil {
+		return nil, err
+	}
+	for _, issue := range allIssues {
+		if issue.GetTitle() == defaultIssueTitle {
+			l.Info().Int("issue", issue.GetNumber()).Msg("found existing issue by title")
+			return issue, nil
+		}
+	}
+
+	l.Debug().Str("label", label).Msg("no existing issue found")
+	return nil, nil
 }
 
 func createComment(ctx *probot.Context, owner, repo string, issueNumber int, body string) (*github.IssueComment, error) {

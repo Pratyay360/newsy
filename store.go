@@ -32,8 +32,6 @@ func (s Subscription) normalized() Subscription {
 	return s
 }
 
-// validate ensures the subscription has the minimum fields needed to route
-// announcements. Dest falls back to the source repo when left empty.
 func (s Subscription) validate() (Subscription, error) {
 	s = s.normalized()
 	if s.SourceOwner == "" || s.SourceRepo == "" {
@@ -60,9 +58,6 @@ func (s Subscription) validate() (Subscription, error) {
 // ErrSubscriptionNotFound is returned by Store.Get when no row matches.
 var ErrSubscriptionNotFound = errors.New("subscription not found")
 
-// Store persists per-repository subscriptions. Implementations must be safe
-// for concurrent use by webhook handlers. Rows are written exclusively from
-// GitHub webhook payloads (app installations), never by an admin UI.
 type Store interface {
 	Get(ctx context.Context, sourceOwner, sourceRepo string) (*Subscription, error)
 	Upsert(ctx context.Context, sub Subscription) (*Subscription, error)
@@ -126,8 +121,6 @@ func OpenPostgresStore(dsn string) (*PostgresStore, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open postgres: %w", err)
 	}
-	// Modest pool: webhook traffic is bursty but each handler holds a
-	// connection only for short indexed queries.
 	db.SetMaxOpenConns(10)
 	db.SetMaxIdleConns(2)
 	db.SetConnMaxLifetime(5 * time.Minute)
@@ -145,7 +138,6 @@ func OpenPostgresStore(dsn string) (*PostgresStore, error) {
 	return &PostgresStore{db: db}, nil
 }
 
-// Close releases the connection pool.
 func (s *PostgresStore) Close() error { return s.db.Close() }
 
 func (s *PostgresStore) Get(ctx context.Context, sourceOwner, sourceRepo string) (*Subscription, error) {
