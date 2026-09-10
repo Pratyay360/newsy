@@ -66,9 +66,6 @@ func openStoreFromEnv() (Store, error) {
 	return store, nil
 }
 
-// startCombinedServer serves the probot webhook handler, the subscription
-// API, and the public install-check endpoint on the same host and port.
-// There is no admin UI: installs are recorded purely from webhooks.
 func startCombinedServer(app *probot.Probot, store Store, host string, port int) error {
 	mux := http.NewServeMux()
 	mux.Handle("/api/check", checkHandler(store))
@@ -153,9 +150,6 @@ func makePushHandler(store Store) func(ctx *probot.Context) error {
 			l.Error().Err(err).Msg("failed to extract info from payload")
 			return err
 		}
-
-		// Only a newly added file is a new post. Pushes that merely
-		// modify or delete existing files produce no announcement.
 		newPosts := filterPostFiles(addedFiles, tenant.postPattern)
 		if len(newPosts) == 0 {
 			l.Debug().Msg("push adds no new posts; skipping announcement")
@@ -163,14 +157,10 @@ func makePushHandler(store Store) func(ctx *probot.Context) error {
 		}
 
 		body := buildAnnouncementBody(ctx, pushRepo, commitSummary, newPosts, l)
-
-		// Create issue in the source repo (where content is changed)
 		return upsertAnnouncementIssue(ctx, pushRepo.Owner, pushRepo.Repo, tenant.issueTitle, tenant.issueLabel, body, l)
 	}
 }
 
-// makeInstallationHandler records app installs in the DB: on install it
-// stores one row per accessible repo, on uninstall/suspend it drops them.
 func makeInstallationHandler(store Store) func(ctx *probot.Context) error {
 	return func(ctx *probot.Context) error {
 		payload := ctx.Payload()
@@ -198,7 +188,6 @@ func makeInstallationHandler(store Store) func(ctx *probot.Context) error {
 	}
 }
 
-// makeInstallationReposHandler tracks repos added/removed on an install.
 func makeInstallationReposHandler(store Store) func(ctx *probot.Context) error {
 	return func(ctx *probot.Context) error {
 		payload := ctx.Payload()
