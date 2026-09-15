@@ -23,7 +23,7 @@ func matchPostPattern(file, pattern string) bool {
 	return false
 }
 
-func filterPostFiles(files []string, pattern string) []string {	
+func filterPostFiles(files []string, pattern string) []string {
 	out := make([]string, 0, len(files))
 	for _, f := range files {
 		if !isPostFile(f) {
@@ -36,8 +36,6 @@ func filterPostFiles(files []string, pattern string) []string {
 	return out
 }
 
-// isPostFile reports whether file has a watched post extension.
-// Only .md, .markdown, .mdx and .html are watched.
 func isPostFile(file string) bool {
 	ext := strings.ToLower(path.Ext(strings.TrimSpace(file)))
 	switch ext {
@@ -75,7 +73,8 @@ func globToRegexp(pattern string) (*regexp.Regexp, error) {
 			b.WriteString("[^/]")
 			i++
 		case '[', ']', '{', '}', '(', ')', '+', '|', '^', '$', '.', '\\':
-			b.WriteString("\\");b.WriteString(string(c))
+			b.WriteString("\\")
+			b.WriteString(string(c))
 			i++
 		default:
 			b.WriteString(string(c))
