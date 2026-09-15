@@ -1,6 +1,7 @@
 [tools]
 sops = "latest"
 go = "latest"
+"go:github.com/yieldray/surgecli" = "latest"
 
 
 [env]
@@ -11,6 +12,7 @@ SOPS_AGE_RECIPIENTS = "age1a9p2k3u40mvdntpad4ga7akvnnqqwm6eskfr2yxkgq3u9lp7jfns2
 encrypt = "sops -e -i .env && mv .env .env.example"
 decrypt = "mv .env.example .env && sops -d -i .env"
 wasm = "GOOS=js GOARCH=wasm go build -o newsy.wasm"
+docs = "surgecli upload ./docs/ newsy.surge.sh"
 
 [deps]
 go = { auto = true }
