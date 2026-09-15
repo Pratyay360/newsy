@@ -9,6 +9,8 @@
 
 **newsy** is a newsletter platform for your static site, using GitHub as a backend , inspired by [utterances](https://utteranc.es).
 
+Read more about it in the [docs](https://docs.lightcms.me/guides/newsy/getstarted/).
+
 ---
 
 ## ✨ Features
