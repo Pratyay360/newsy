@@ -156,7 +156,30 @@ func makePushHandler(store Store) func(ctx *probot.Context) error {
 			return nil
 		}
 
-		body := buildAnnouncementBody(ctx, pushRepo, commitSummary, newPosts, l)
+		headSHA := getHeadSHA(ctx.Payload())
+		var validPosts []postFile
+		for _, file := range newPosts {
+			content, err := fetchFileContent(ctx, pushRepo.Owner, pushRepo.Repo, file, headSHA)
+			if err != nil {
+				l.Warn().Err(err).Str("file", file).Msg("failed to fetch file content; skipping")
+				continue
+			}
+			if strings.TrimSpace(content) == "" {
+				l.Debug().Str("file", file).Msg("skipping empty post file")
+				continue
+			}
+			if isDraftPost(file, content) {
+				l.Info().Str("file", file).Msg("skipping draft post")
+				continue
+			}
+			validPosts = append(validPosts, postFile{path: file, content: content})
+		}
+		if len(validPosts) == 0 {
+			l.Debug().Msg("push adds no new non-draft posts; skipping announcement")
+			return nil
+		}
+
+		body := buildAnnouncementBody(commitSummary, validPosts)
 		return upsertAnnouncementIssue(ctx, pushRepo.Owner, pushRepo.Repo, tenant.issueTitle, tenant.issueLabel, body, l)
 	}
 }
@@ -291,44 +314,36 @@ func resolveTenantConfig(pushRepo probot.Repo, store Store, l zerolog.Logger) (t
 	return tenantConfig{}, false
 }
 
-func buildAnnouncementBody(ctx *probot.Context, pushRepo probot.Repo, commitSummary string, changedFiles []string, l zerolog.Logger) string {
+func buildAnnouncementBody(commitSummary string, posts []postFile) string {
 	var b strings.Builder
 	b.WriteString(commitSummary)
-	appendChangedFilesList(&b, changedFiles)
-	appendFileContents(ctx, &b, pushRepo, changedFiles, l)
+	appendChangedFilesList(&b, posts)
+	appendFileContents(&b, posts)
 	return b.String()
 }
 
-func appendChangedFilesList(b *strings.Builder, files []string) {
-	if len(files) == 0 {
+func appendChangedFilesList(b *strings.Builder, posts []postFile) {
+	if len(posts) == 0 {
 		return
 	}
 	b.WriteString("\n**New Post:**\n")
-	for _, f := range files {
+	for _, p := range posts {
 		b.WriteString("- `")
-		b.WriteString(f)
+		b.WriteString(p.path)
 		b.WriteString("`\n")
 	}
 }
 
-func appendFileContents(ctx *probot.Context, b *strings.Builder, pushRepo probot.Repo, files []string, l zerolog.Logger) {
-	if len(files) == 0 {
-		return
-	}
-	headSHA := getHeadSHA(ctx.Payload())
-	for _, file := range files {
-		content, err := fetchFileContent(ctx, pushRepo.Owner, pushRepo.Repo, file, headSHA)
-		if err != nil {
-			l.Warn().Err(err).Str("file", file).Msg("failed to fetch file content; skipping")
-			continue
-		}
+func appendFileContents(b *strings.Builder, posts []postFile) {
+	for _, p := range posts {
+		content := p.content
 		if strings.TrimSpace(content) == "" {
 			continue
 		}
 		content, truncated := truncateContent(content, maxFileChars)
 		content = strings.ReplaceAll(content, "```", "` `` `")
 
-		b.WriteString(file)
+		b.WriteString(p.path)
 		b.WriteString("\n\n")
 		b.WriteString(content)
 		if truncated {

@@ -3,8 +3,7 @@
 ./public
 ./makko*
 docs/web
-makko-aarch64-linux
-.github/
+!.github/
 .vscode/
 main.wasm
 newsy
