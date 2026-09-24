@@ -1,8 +1,6 @@
 <p align="center">
-  <img alt="newsy header" src="https://shieldcn.dev/header/surface.svg?title=newsy&subtitle=GitHub backed newsletter+for+your+static+site&mode=dark" />
+  <img alt="newsy header" src="https://shieldcn.dev/header/surface.svg?title=newsy&subtitle=GitHub backed newsletter+for+your+static+site&mode=dark" ></img>
 </p>
->
-
 <p align="center"> <picture> <source media="(prefers-color-scheme: dark)" srcset="https://shieldcn.dev/github/stars/Pratyay360/newsy.svg?variant=secondary&amp;theme=emerald&amp;font=jetbrains-mono" /> <img alt="GitHub Stars" src="https://shieldcn.dev/github/stars/Pratyay360/newsy.svg?variant=secondary&amp;theme=emerald&amp;mode=light&amp;font=jetbrains-mono" /> </picture> </p>
 
 <p align="center"> <a href="https://github.com/Pratyay360/newsy"> <img alt="GitHub repository" src="https://img.shields.io/badge/GitHub-Pratyay360%2Fnewsy-181717?logo=github" /> </a> <a href="https://github.com/Pratyay360/newsy/blob/main/LICENSE"> <img alt="License" src="https://img.shields.io/github/license/Pratyay360/newsy" /> </a> <a href="https://github.com/Pratyay360/newsy/graphs/contributors"> <img alt="Contributors" src="https://img.shields.io/github/contributors/Pratyay360/newsy" /> </a> <a href="https://github.com/Pratyay360/newsy/forks"> <img alt="Forks" src="https://img.shields.io/github/forks/Pratyay360/newsy" /> </a> </p>
